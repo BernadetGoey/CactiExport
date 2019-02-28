@@ -1,0 +1,7 @@
+[info]
+compat = 1.0.0
+author=Ilionx
+longname=Poller Export for Cacti 1.x
+name=cactiexport
+version=1.0.0dev
+nosync = configs, output, *.html, *.conf, *.txt, *.png
