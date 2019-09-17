@@ -8,8 +8,16 @@ function plugin_cactiexport_install()
     api_plugin_register_hook( 'cactiexport', 'poller_bottom', 'cactiexport_poller_bottom', 'setup.php' );
     api_plugin_register_hook( 'cactiexport', 'poller_output', 'cactiexport_poller_output', 'setup.php' );
     api_plugin_register_hook( 'cactiexport', 'config_settings', 'cactiexport_config_settings', 'setup.php' );
-
+    api_plugin_register_hook('cactiexport', 'page_head', 'cactiexport_page_head', 'setup.php');
     cactiexport_setup_table_new();
+}
+
+function cactiexport_page_head() {
+    global $config;
+
+    if (file_exists($config['base_path'] . "/plugins/cactiexport/themes/" . get_selected_theme() . "/main.css")) {
+        print "<link href='" . $config['url_path'] . "plugins/cactiexport/themes/" . get_selected_theme() . "/main.css' type='text/css' rel='stylesheet'>\n";
+    }
 }
 
 function cactiexport_config_settings()
@@ -17,6 +25,16 @@ function cactiexport_config_settings()
     global $tabs, $settings;
 
     $tabs[ "export" ] = "Cacti Export";
+
+    $dt_query = <<<EOT
+    SELECT *
+    FROM data_template
+EOT;
+    $data_templates = db_fetch_assoc($dt_query);
+    $data_template_options = [];
+    foreach($data_templates as $template) {
+        $data_template_options[$template['id']] = $template['name'];
+    }
 
     $temp = array(
         "cactiexport_influxdb_header"             => array(
@@ -61,6 +79,12 @@ function cactiexport_config_settings()
             "method"        => "textbox",
             "default"       => "",
             "max_length"    => 100,
+        ),
+        'cactiexport_data_templates_drop' => array(
+            "friendly_name" => "Data templates",
+            "description"   => "Select which templates should be exported",
+            'method' => 'drop_multi',
+            'array' => $data_template_options,
         ),
     );
 

@@ -103,6 +103,7 @@ function cactiexport_poller_bottom()
      ,host.hostname
      ,host.description
      ,data.name_cache
+     ,data.data_template_id
      ,(CASE WHEN rrd.data_source_type_id=1 THEN 'gauge' WHEN rrd.data_source_type_id=2 THEN 'counter' WHEN rrd.data_source_type_id=3 THEN 'counter' WHEN rrd.data_source_type_id=4 THEN 'counter' END) AS rate
      ,data_template.name AS metric
      ,host_template.name AS host_type
@@ -138,6 +139,7 @@ EOT;
         $ds_info[$ds_id]['extra_fields']['cacti_data_id'] = (float)$ds['id'];
         $ds_info[$ds_id]['collector'] = 'cacti';
         $ds_info[$ds_id]['hostname'] = $ds['hostname'];
+        $ds_info[$ds_id]['data_template_id'] = $ds['data_template_id'];
         $ds_info[$ds_id]['description'] = $ds['description'];
         $host = cactiexport_host($ds["hostname"], $ds["description"]);
         $ds_info[$ds_id]['host'] = strlen($host) > 0 ? $host : $ds['hostname'];
@@ -189,38 +191,39 @@ EOT;
             && isset($ds_info[$item['local_data_id']])
             && is_numeric($item['value'])
         ) {
-
-            $key = $item['key'];
-            $val = (float)$item['value'];
-            $timestamp = (int)$item['timestamp'];
+            $templates = explode(',',read_config_option('cactiexport_data_templates_drop'));
             $id = $item['local_data_id'];
-            $host_name = $ds_info[$id]['hostname'];
-            // send data for each host separately
-            if ($old_hostname <> $host_name) {
-                if (strlen($old_hostname) > 0) {
-                    // send data to external database
-                    $count = cactiexport_send_data_influx_db($data_array, $count);
+            if(empty($templates) || in_array($ds_info[$id]['data_template_id'], $templates)) {
+                $key = $item['key'];
+                $val = (float)$item['value'];
+                $timestamp = (int)$item['timestamp'];
+                $host_name = $ds_info[$id]['hostname'];
+                // send data for each host separately
+                if ($old_hostname <> $host_name) {
+                    if (strlen($old_hostname) > 0) {
+                        // send data to external database
+                        $count = cactiexport_send_data_influx_db($data_array, $count);
+                    }
+                    $old_hostname = $host_name;
+                    // reset data array
+                    $data_array = array();
                 }
-                $old_hostname = $host_name;
-                // reset data array
-                $data_array = array();
+                $point['metric'] = $ds_info[$id]['metric'];
+                $point['timestamp'] = $timestamp;
+                $point['value'] = $val;
+                $point['tags'] = $ds_info[$id];
+                $point['tags']['type'] = $key;
+                if (isset($ds_info[$id]['extra_fields'])) {
+                    $point['extra_fields'] = $ds_info[$id]['extra_fields'];
+                }
+                $point['extra_fields']['value'] = $val;
+
+                unset($point['tags']['metric']); // delete unwanted data
+                unset($point['tags']['id']); // delete unwanted data
+                unset($point['tags']['extra_fields']); // delete unwanted data
+
+                $data_array[] = $point;
             }
-            $point['metric'] = $ds_info[$id]['metric'];
-            $point['timestamp'] = $timestamp;
-            $point['value'] = $val;
-            $point['tags'] = $ds_info[$id];
-            $point['tags']['type'] = $key;
-            if (isset($ds_info[$id]['extra_fields'])) {
-                $point['extra_fields'] = $ds_info[$id]['extra_fields'];
-            }
-            $point['extra_fields']['value'] = $val;
-
-            unset($point['tags']['metric']); // delete unwanted data
-            unset($point['tags']['id']); // delete unwanted data
-            unset($point['tags']['extra_fields']); // delete unwanted data
-
-            $data_array[] = $point;
-
         }
     }
 
